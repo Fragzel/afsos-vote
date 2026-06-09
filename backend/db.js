@@ -16,7 +16,14 @@ const db = new sqlite3.Database(dbPath, (err) => {
             reminder_sent DATETIME,
             login_code TEXT,
             login_code_expires DATETIME
-        )`);
+        )`, () => {
+            db.get(`SELECT * FROM users WHERE email = 'admin@afsos.org'`, (err, row) => {
+                if (!row) {
+                    db.run(`INSERT INTO users (email) VALUES ('admin@afsos.org')`);
+                    console.log('Admin user admin@afsos.org seeded successfully.');
+                }
+            });
+        });
 
         db.run(`CREATE TABLE IF NOT EXISTS candidates (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
