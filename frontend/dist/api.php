@@ -10,6 +10,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Logger helper
+function log_message($message) {
+    $logPath = __DIR__ . '/../../backend/api.log';
+    $time = date('Y-m-d H:i:s');
+    file_put_contents($logPath, "[$time] $message\n", FILE_APPEND);
+}
+
+log_message("Request: " . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI']);
+
 // Simple pure PHP JWT implementation
 class SimpleJWT {
     private static function base64UrlEncode($data) {
@@ -58,9 +67,17 @@ class SimpleJWT {
     }
 }
 
+// Global environment variables container
+$env_vars = [];
+
 // Load .env variables
 function load_env($path) {
-    if (!file_exists($path)) return;
+    global $env_vars;
+    if (!file_exists($path)) {
+        log_message("Warning: .env file not found at $path");
+        return;
+    }
+    log_message("Loading .env file from $path");
     $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($lines as $line) {
         if (strpos(trim($line), '#') === 0) continue;
@@ -69,8 +86,19 @@ function load_env($path) {
         $name = trim($parts[0]);
         $value = trim($parts[1]);
         $value = preg_replace('/^["\']|["\']$/', '', $value);
+        $env_vars[$name] = $value;
         $_ENV[$name] = $value;
+        putenv("$name=$value");
     }
+}
+
+// Helper to retrieve env variables safely
+function get_env_var($name, $default = null) {
+    global $env_vars;
+    if (isset($env_vars[$name])) return $env_vars[$name];
+    if (isset($_ENV[$name])) return $_ENV[$name];
+    $val = getenv($name);
+    return $val !== false ? $val : $default;
 }
 
 // Pure PHP SMTP Client using Sockets (SSL port 465 or plain)
@@ -80,6 +108,8 @@ function send_smtp_mail($to, $subject, $html_body, $config) {
     $user = $config['user'];
     $pass = $config['pass'];
     $from = $config['from'];
+    
+    log_message("SMTP: Connecting to $host:$port...");
     
     $from_email = $user;
     if (preg_match('/<([^>]+)>/', $from, $matches)) {
@@ -139,17 +169,18 @@ function send_smtp_mail($to, $subject, $html_body, $config) {
     
     fwrite($socket, "QUIT\r\n");
     fclose($socket);
+    log_message("SMTP: Email successfully sent to $to");
     return true;
 }
 
 // Locate and load .env file
 $envPath = __DIR__ . '/../../backend/.env';
 if (!file_exists($envPath)) {
-    $envPath = __DIR__ . '/.env'; // fallback inside same folder
+    $envPath = __DIR__ . '/.env'; // fallback
 }
 load_env($envPath);
 
-$secret = isset($_ENV['SECRET_KEY']) ? $_ENV['SECRET_KEY'] : 'afsos_super_secret_key_change_me';
+$secret = get_env_var('SECRET_KEY', 'afsos_super_secret_key_change_me');
 
 // Database Initialization (SQLite)
 $dbPath = __DIR__ . '/../../backend/database.sqlite';
@@ -158,6 +189,7 @@ if (!file_exists($dbDir)) {
     mkdir($dbDir, 0755, true);
 }
 
+log_message("Opening database at: $dbPath");
 $db = new SQLite3($dbPath);
 $db->exec("PRAGMA foreign_keys = ON;");
 
@@ -225,6 +257,19 @@ function get_auth_user($db, $secret) {
     return null;
 }
 
+// Fallback headers helper
+if (!function_exists('getallheaders')) {
+    function getallheaders() {
+        $headers = [];
+        foreach ($_SERVER as $name => $value) {
+            if (substr($name, 0, 5) == 'HTTP_') {
+                $headers[str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($name, 5)))))] = $value;
+            }
+        }
+        return $headers;
+    }
+}
+
 // -------------------------------------------------------------
 // ENDPOINTS
 // -------------------------------------------------------------
@@ -242,6 +287,8 @@ if ($path === 'request-code' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     $email = isset($data['email']) ? trim($data['email']) : '';
     
+    log_message("Request code for email: $email");
+    
     $stmt = $db->prepare("SELECT * FROM users WHERE email = :email");
     $stmt->bindValue(':email', $email, SQLITE3_TEXT);
     $res = $stmt->execute();
@@ -249,6 +296,7 @@ if ($path === 'request-code' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     
     $isAdmin = ($email === 'admin@afsos.org');
     if (!$user && !$isAdmin) {
+        log_message("Access denied: User not eligible: $email");
         http_response_code(404);
         echo json_encode(['error' => 'not_found']);
         exit;
@@ -258,6 +306,7 @@ if ($path === 'request-code' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $endDateStr = $db->querySingle("SELECT value FROM settings WHERE key = 'election_end_date'");
     if ($endDateStr && !$isAdmin) {
         if (time() > strtotime($endDateStr)) {
+            log_message("Access denied: Election closed: $email");
             http_response_code(403);
             echo json_encode(['error' => 'election_closed']);
             exit;
@@ -300,21 +349,27 @@ if ($path === 'request-code' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>';
     
-    if (isset($_ENV['SMTP_HOST']) && !empty($_ENV['SMTP_HOST']) && isset($_ENV['SMTP_USER'])) {
+    $smtp_host = get_env_var('SMTP_HOST');
+    $smtp_user = get_env_var('SMTP_USER');
+    
+    if (!empty($smtp_host) && !empty($smtp_user)) {
         try {
+            log_message("Sending code via SMTP to $email (Host: $smtp_host)");
             send_smtp_mail($email, $subject, $html, [
-                'host' => $_ENV['SMTP_HOST'],
-                'port' => $_ENV['SMTP_PORT'],
-                'user' => $_ENV['SMTP_USER'],
-                'pass' => $_ENV['SMTP_PASS'],
-                'from' => isset($_ENV['SMTP_FROM']) ? $_ENV['SMTP_FROM'] : '"AFSOS" <noreply@vote-afsos.com>'
+                'host' => $smtp_host,
+                'port' => get_env_var('SMTP_PORT', 465),
+                'user' => $smtp_user,
+                'pass' => get_env_var('SMTP_PASS'),
+                'from' => get_env_var('SMTP_FROM', '"AFSOS" <noreply@vote-afsos.com>')
             ]);
             echo json_encode(['success' => true, 'message' => 'Code envoyé par email']);
         } catch (Exception $e) {
+            log_message("SMTP Error: " . $e->getMessage());
             http_response_code(500);
             echo json_encode(['error' => 'Erreur lors de l\'envoi de l\'email: ' . $e->getMessage()]);
         }
     } else {
+        log_message("Dev Mode: SMTP config missing in env. Returning code $code in body.");
         echo json_encode(['success' => true, 'message' => 'Code généré (Mode Démo)', 'code' => $code]);
     }
     exit;
@@ -459,17 +514,21 @@ if ($path === 'vote' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>';
             
-            if (isset($_ENV['SMTP_HOST']) && !empty($_ENV['SMTP_HOST']) && isset($_ENV['SMTP_USER'])) {
+            $smtp_host = get_env_var('SMTP_HOST');
+            $smtp_user = get_env_var('SMTP_USER');
+            
+            if (!empty($smtp_host) && !empty($smtp_user)) {
                 try {
+                    log_message("Sending vote confirmation via SMTP to $voterEmail");
                     send_smtp_mail($voterEmail, $subject, $html, [
-                        'host' => $_ENV['SMTP_HOST'],
-                        'port' => $_ENV['SMTP_PORT'],
-                        'user' => $_ENV['SMTP_USER'],
-                        'pass' => $_ENV['SMTP_PASS'],
-                        'from' => isset($_ENV['SMTP_FROM']) ? $_ENV['SMTP_FROM'] : '"AFSOS" <noreply@vote-afsos.com>'
+                        'host' => $smtp_host,
+                        'port' => get_env_var('SMTP_PORT', 465),
+                        'user' => $smtp_user,
+                        'pass' => get_env_var('SMTP_PASS'),
+                        'from' => get_env_var('SMTP_FROM', '"AFSOS" <noreply@vote-afsos.com>')
                     ]);
                 } catch (Exception $e) {
-                    // Fail silently for email confirmation, don't crash the vote success response
+                    log_message("Vote confirmation SMTP error: " . $e->getMessage());
                 }
             }
         }
@@ -608,7 +667,8 @@ if ($path === 'admin/remind-user' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
     
-    $voteLink = isset($_ENV['VOTE_LINK']) ? $_ENV['VOTE_LINK'] : 'http://localhost:5173';
+    $voteLink = get_env_var('VOTE_LINK', 'http://localhost:5173');
+    log_message("Reminding user: " . $targetUser['email'] . " (Vote Link: $voteLink)");
     
     $subject = 'Élection du Conseil d\'Administration AFSOS - Ouverture du scrutin';
     $html = '
@@ -640,26 +700,31 @@ if ($path === 'admin/remind-user' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>';
     
-    if (isset($_ENV['SMTP_HOST']) && !empty($_ENV['SMTP_HOST']) && isset($_ENV['SMTP_USER'])) {
+    $smtp_host = get_env_var('SMTP_HOST');
+    $smtp_user = get_env_var('SMTP_USER');
+    
+    if (!empty($smtp_host) && !empty($smtp_user)) {
         try {
             send_smtp_mail($targetUser['email'], $subject, $html, [
-                'host' => $_ENV['SMTP_HOST'],
-                'port' => $_ENV['SMTP_PORT'],
-                'user' => $_ENV['SMTP_USER'],
-                'pass' => $_ENV['SMTP_PASS'],
-                'from' => isset($_ENV['SMTP_FROM']) ? $_ENV['SMTP_FROM'] : '"AFSOS" <noreply@vote-afsos.com>'
+                'host' => $smtp_host,
+                'port' => get_env_var('SMTP_PORT', 465),
+                'user' => $smtp_user,
+                'pass' => get_env_var('SMTP_PASS'),
+                'from' => get_env_var('SMTP_FROM', '"AFSOS" <noreply@vote-afsos.com>')
             ]);
             
             $now = date('Y-m-d H:i:s');
             $db->exec("UPDATE users SET reminder_sent = '$now' WHERE id = $userId");
             echo json_encode(['success' => true, 'message' => "Invitation envoyée à " . $targetUser['email']]);
         } catch (Exception $e) {
+            log_message("Remind user SMTP error: " . $e->getMessage());
             http_response_code(500);
             echo json_encode(['error' => 'Erreur SMTP: ' . $e->getMessage()]);
         }
     } else {
         $now = date('Y-m-d H:i:s');
         $db->exec("UPDATE users SET reminder_sent = '$now' WHERE id = $userId");
+        log_message("Dev Mode: Simulated invitation to " . $targetUser['email']);
         echo json_encode(['success' => true, 'message' => 'Invitation envoyée (Simulée)']);
     }
     exit;
@@ -855,6 +920,7 @@ if ($path === 'admin/queue-status' && $_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 // Catch-all
+log_message("Warning: Endpoint not found for path: $path");
 http_response_code(404);
 echo json_encode(['error' => 'Not Found']);
 exit;
