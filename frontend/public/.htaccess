@@ -2,6 +2,10 @@
   RewriteEngine On
   RewriteBase /
 
+  # Pass the Authorization header to PHP in FastCGI/FPM environments
+  RewriteCond %{HTTP:Authorization} .
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
   # Rewrite all /api/something requests to api.php/something
   RewriteRule ^api/(.*)$ api.php/$1 [QSA,L]
 
