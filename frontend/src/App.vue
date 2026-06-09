@@ -24,7 +24,9 @@
 
 body {
   font-family: var(--font-sans);
-  background-color: #f8fafc; /* Premium light grey-blue */
+  background: radial-gradient(circle at top left, rgba(147, 197, 253, 0.15) 0%, transparent 60%),
+              radial-gradient(circle at bottom right, rgba(249, 115, 22, 0.1) 0%, transparent 60%),
+              #f8fafc;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -42,9 +44,9 @@ body::before {
   background-image: url('/background.png');
   background-repeat: no-repeat;
   background-position: center;
-  background-size: min(80vw, 600px); /* Responsive watermark size */
-  opacity: 0.07; /* Subtle elegant watermark */
-  z-index: -1;
+  background-size: min(80vw, 420px); /* Responsive watermark size */
+  opacity: 0.12; /* Subtle elegant watermark */
+  z-index: -2;
   pointer-events: none;
 }
 
@@ -56,20 +58,25 @@ body::before {
 
 /* Common Components */
 .afsos-shell {
-  background: var(--color-background-secondary);
+  background: rgba(244, 246, 249, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-radius: var(--border-radius-lg);
-  border: 0.5px solid var(--color-border-tertiary);
+  border: 1px solid rgba(255, 255, 255, 0.5);
   overflow: hidden;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+  box-shadow: 0 12px 35px rgba(26, 58, 107, 0.07);
 }
 
 .afsos-topbar {
-  background: #1a3a6b;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--color-border-tertiary);
   padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 60px;
+  height: 66px;
 }
 
 .afsos-logo-zone {
@@ -97,17 +104,17 @@ body::before {
 }
 
 .afsos-sep {
-  width: 0.5px;
+  width: 1px;
   height: 28px;
-  background: rgba(255,255,255,0.25);
+  background: var(--color-border-secondary);
   margin: 0 14px;
 }
 
 .afsos-logo-label {
   font-size: 12px;
-  color: rgba(255,255,255,0.75);
+  color: var(--color-text-primary);
   line-height: 1.4;
-  max-width: 150px;
+  max-width: 180px;
 }
 
 .afsos-secure {
@@ -115,10 +122,11 @@ body::before {
   align-items: center;
   gap: 5px;
   font-size: 11px;
-  color: rgba(255,255,255,0.6);
-  border: 0.5px solid rgba(255,255,255,0.2);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-secondary);
   border-radius: var(--border-radius-md);
   padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .afsos-main {
@@ -126,11 +134,14 @@ body::before {
 }
 
 .afsos-card {
-  background: var(--color-background-primary);
-  border: 0.5px solid var(--color-border-tertiary);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: var(--border-radius-lg);
   padding: 22px 22px;
   margin-bottom: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.01);
 }
 
 .afsos-btn {

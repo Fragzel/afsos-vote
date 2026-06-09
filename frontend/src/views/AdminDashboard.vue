@@ -1,16 +1,16 @@
 <template>
   <div class="afsos-shell" style="max-width: 800px; margin: 20px auto;">
-    <div class="afsos-topbar" style="background: white; border-bottom: 1px solid var(--color-border-tertiary);">
+    <div class="afsos-topbar">
       <div class="afsos-logo-zone">
         <img src="/logo.png" alt="AFSOS Logo" style="height: 40px;" />
-        <div class="afsos-sep" style="background: var(--color-border-secondary);"></div>
-        <div class="afsos-logo-label" style="color: var(--color-text-primary);">Administration AFSOS Vote</div>
+        <div class="afsos-sep"></div>
+        <div class="afsos-logo-label">Administration AFSOS Vote</div>
       </div>
       <div style="display: flex; align-items: center; gap: 15px;">
         <div v-if="timeRemaining" style="font-size: 13px; color: #F57F17; font-weight: bold; background: #FFF9C4; padding: 4px 10px; border-radius: 4px; border: 1px solid #FBC02D;">
           ⏳ {{ timeRemaining }}
         </div>
-        <button @click="logout" class="afsos-btn" style="padding: 5px 10px; font-size: 11px; border-color: transparent;">Déconnexion</button>
+        <button @click="logout" class="afsos-btn" style="padding: 5px 10px; font-size: 11px; border-color: transparent; background: transparent;">Déconnexion</button>
       </div>
     </div>
     

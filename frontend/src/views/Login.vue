@@ -1,10 +1,10 @@
 <template>
   <div class="afsos-shell">
-    <div class="afsos-topbar" style="background: white; border-bottom: 1px solid var(--color-border-tertiary);">
+    <div class="afsos-topbar">
       <div class="afsos-logo-zone">
         <img src="/logo.png" alt="AFSOS Logo" style="height: 40px;" />
-        <div class="afsos-sep" style="background: var(--color-border-secondary);"></div>
-        <div class="afsos-logo-label" style="color: var(--color-text-primary);">Élection du Conseil d'Administration</div>
+        <div class="afsos-sep"></div>
+        <div class="afsos-logo-label">Élection du Conseil d'Administration</div>
       </div>
     </div>
     <div class="afsos-main">
