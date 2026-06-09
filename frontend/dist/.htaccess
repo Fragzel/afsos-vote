@@ -1,0 +1,15 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Rewrite all /api/something requests to api.php/something
+  RewriteRule ^api/(.*)$ api.php/$1 [QSA,L]
+
+  # If request is for a real file or folder, serve it directly
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Fallback to index.html for Single Page Application routing (Vue Router)
+  RewriteRule ^ index.html [L]
+</IfModule>

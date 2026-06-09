@@ -249,6 +249,8 @@ let countdownInterval = null
 
 const queueStatus = ref(null)
 let queueInterval = null
+const localQueue = ref([])
+const isProcessingLocalQueue = ref(false)
 
 const getAuthHeaders = () => ({ 'Authorization': `Bearer ${localStorage.getItem('token')}` })
 
@@ -279,6 +281,14 @@ onUnmounted(() => {
 })
 
 const fetchQueueStatus = async () => {
+  if (isProcessingLocalQueue.value) {
+    queueStatus.value = {
+      queueLength: localQueue.value.length,
+      isProcessing: true,
+      delayMs: 20000
+    }
+    return
+  }
   try {
     const res = await fetch('/api/admin/queue-status', { headers: getAuthHeaders() })
     if (res.ok) {
@@ -406,20 +416,67 @@ const resetElection = async () => {
 
 const remindAll = async () => {
   if (!confirm("Voulez-vous envoyer l'e-mail d'invitation à voter à toutes les personnes n'ayant pas encore voté ?")) return;
-  reminding.value = true;
-  remindMsg.value = '';
+  
+  // Filter users who haven't voted and haven't received a reminder
+  const usersToRemind = users.value.filter(u => !u.has_voted && !u.reminder_sent)
+  if (usersToRemind.length === 0) {
+    alert("Aucun utilisateur à inviter.")
+    return
+  }
+  
+  reminding.value = true
+  remindMsg.value = ''
+  localQueue.value = [...usersToRemind]
+  
+  // Start local queue processing in background
+  processLocalQueue()
+}
+
+const processLocalQueue = async () => {
+  if (isProcessingLocalQueue.value || localQueue.value.length === 0) return
+  isProcessingLocalQueue.value = true
+  
   try {
-    const res = await fetch('/api/admin/remind-all', {
-      method: 'POST',
-      headers: getAuthHeaders()
-    })
-    const data = await res.json()
-    remindMsg.value = data.message || "Invitations envoyées"
-    await fetchQueueStatus()
-  } catch(err) {
-    remindMsg.value = "Erreur lors de l'envoi."
+    while (localQueue.value.length > 0) {
+      const user = localQueue.value[0]
+      
+      // Update queueStatus display
+      queueStatus.value = {
+        queueLength: localQueue.value.length,
+        isProcessing: true,
+        delayMs: 20000
+      }
+      
+      try {
+        const res = await fetch('/api/admin/remind-user', {
+          method: 'POST',
+          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id })
+        })
+        
+        if (res.ok) {
+          localQueue.value.shift()
+          await refreshData()
+        } else {
+          const data = await res.json()
+          console.error("Erreur d'envoi à", user.email, ":", data.error)
+          localQueue.value.shift()
+        }
+      } catch (err) {
+        console.error("Erreur réseau pour", user.email, ":", err)
+        localQueue.value.shift()
+      }
+      
+      // Delay 20 seconds between SMTP sends
+      if (localQueue.value.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 20000))
+      }
+    }
   } finally {
+    isProcessingLocalQueue.value = false
     reminding.value = false
+    remindMsg.value = "Toutes les invitations ont été traitées."
+    await fetchQueueStatus()
   }
 }
 
