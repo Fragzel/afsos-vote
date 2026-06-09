@@ -24,11 +24,28 @@
 
 body {
   font-family: var(--font-sans);
-  background-color: #e2e8f0; /* Darker background outside the shell */
+  background-color: #f8fafc; /* Premium light grey-blue */
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: url('/background.png');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: min(80vw, 600px); /* Responsive watermark size */
+  opacity: 0.07; /* Subtle elegant watermark */
+  z-index: -1;
+  pointer-events: none;
 }
 
 .app-container {
